@@ -9,22 +9,15 @@ import android.os.SystemClock
 import android.support.v7.app.AppCompatActivity
 import android.util.Log
 import android.view.MotionEvent
-import com.google.ar.core.Anchor
-import com.google.ar.core.HitResult
-import com.google.ar.core.Plane
-import com.google.ar.sceneform.AnchorNode
 import com.google.ar.sceneform.Node
 import com.google.ar.sceneform.Scene
 import com.google.ar.sceneform.math.Quaternion
 import com.google.ar.sceneform.math.Vector3
 import com.google.ar.sceneform.rendering.ModelRenderable
-import com.google.ar.sceneform.ux.FootprintSelectionVisualizer
-import com.google.ar.sceneform.ux.RotationController
-import com.google.ar.sceneform.ux.TransformableNode
-import com.google.ar.sceneform.ux.TransformationSystem
-//import com.sun.xml.internal.ws.addressing.EndpointReferenceUtil.transform
 import kotlinx.android.synthetic.main.act_main.*
 import java.util.concurrent.CompletableFuture
+import kotlin.math.pow
+import kotlin.math.sqrt
 
 
 class MainAct : AppCompatActivity() {
@@ -48,9 +41,24 @@ class MainAct : AppCompatActivity() {
     private var originalY: Float = 0f
     private var pressTime: Long = 0
     private var releaseTime: Long = 0
-    private var scalingTimeMs: Long = 3000 //3 seconds
+    private val scalingTimeMs: Long = 3000 //3 seconds
     private var small: Boolean = true
     private var rotated: Boolean = false
+    private val rotationTrigger: Float = 30f
+    //^^^ for rotation
+
+    private var originalDistance: Float = 0f
+    private var distanceLatch: Boolean = false
+    private var oldDeltaDistance: Float = 0f
+    private val deltaZoomTrigger: Float = 3f //sensitive
+    private val scaling: Float = 1.015f
+    private var oldPointer0x: Float = -1f
+    private var oldPointer0y: Float = -1f
+    private var oldPointer1x: Float = -1f
+    private var oldPointer1y: Float = -1f
+    private val noise: Float = 0.5f
+    //^^^ for zooming
+
     //^^^^ for OnTouchListener
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -116,12 +124,12 @@ class MainAct : AppCompatActivity() {
         }
     }
 
-    private fun renderCube(){
+    private fun renderCube() {
         renderableFuture = ModelRenderable.builder()
             .setSource(this, Uri.parse("cube.sfb"))
             .build()
 
-        if(::currentNode.isInitialized)
+        if (::currentNode.isInitialized)
             scene.removeChild(currentNode)
 
         renderableFuture.thenAccept { addNodeCube(it) }
@@ -136,12 +144,12 @@ class MainAct : AppCompatActivity() {
     }
 
     //for cup
-    private fun renderCup(){
+    private fun renderCup() {
         renderableFuture = ModelRenderable.builder()
             .setSource(this, Uri.parse("coffee_cup.sfb"))
             .build()
 
-        if(::currentNode.isInitialized)
+        if (::currentNode.isInitialized)
             scene.removeChild(currentNode)
 
         renderableFuture.thenAccept { addNodeCup(it) }
@@ -204,7 +212,6 @@ class MainAct : AppCompatActivity() {
         normalButton.isClickable = false
         resetMaterialButton.isClickable = false
 
-
         colorButtonText = colorButton.text.toString()
         metallicButtonText = metallicButton.text.toString()
         roughnessButtonText = roughnessButton.text.toString()
@@ -238,14 +245,13 @@ class MainAct : AppCompatActivity() {
         resetMaterialButton.text = resetMaterialButtonText
     }
 
-    private fun setNewOnTouchListening(currentNode: Node){
+    private fun setNewOnTouchListening(currentNode: Node) {
         currentNode.setOnTouchListener { hitTestResult, motionEvent ->
-            //Log.d("checking",  "trying drag")
             var deltaX: Float
             var deltaY: Float
 
 
-            when(motionEvent.action){
+            when (motionEvent.action) {
                 MotionEvent.ACTION_DOWN -> {
                     pressTime = motionEvent.eventTime
                     Log.d("checking", pressTime.toString())
@@ -253,48 +259,143 @@ class MainAct : AppCompatActivity() {
                     originalY = motionEvent.y
                 }
                 MotionEvent.ACTION_UP -> {
-                    releaseTime = SystemClock.uptimeMillis()
-                    if((releaseTime - pressTime) > scalingTimeMs && !rotated){
-                        if(currentNode.name == "cube"){
-                            if(small)
-                                currentNode.localScale = Vector3(6f,6f,6f)
-                            else
-                                currentNode.localScale = Vector3(4f,4f,4f)
+                    if (motionEvent.pointerCount == 1 && false) { //touch and hold 3 sec to toggle scale (temp feature so not run)
+                        releaseTime = SystemClock.uptimeMillis()
+                        if ((releaseTime - pressTime) > scalingTimeMs && !rotated) {
+                            if (currentNode.name == "cube") {
+                                if (small)
+                                    currentNode.localScale = Vector3(6f, 6f, 6f)
+                                else
+                                    currentNode.localScale = Vector3(4f, 4f, 4f)
+                            } else if (currentNode.name == "cup") {
+                                if (small)
+                                    currentNode.localScale = Vector3(5f, 5f, 5f)
+                                else
+                                    currentNode.localScale = Vector3(3f, 3f, 3f)
+                            }
+                            small = !small
                         }
-                        else if(currentNode.name == "cup"){
-                            if(small)
-                                currentNode.localScale = Vector3(5f,5f,5f)
-                            else
-                                currentNode.localScale = Vector3(3f,3f,3f)
-                        }
-                        small = !small
+                        rotated = false
+                        distanceLatch = false
                     }
-                    rotated = false
                 }
                 MotionEvent.ACTION_MOVE -> {
-                    deltaX = originalX - motionEvent.x
-                    deltaY = originalY - motionEvent.y
-                    var rotationSpeed: Float = 0.5f
-                    var rotationTrigger: Float = 30f
+                    //Log.d("checking", motionEvent.pointerCount.toString())
+                    if (motionEvent.pointerCount == 1) {
+                        deltaX = originalX - motionEvent.x
+                        deltaY = originalY - motionEvent.y
+                        val rotationSpeed: Float = 0.005f
 
-                    if(deltaX > rotationTrigger){
-                        currentNode.localRotation = Quaternion.multiply(currentNode.localRotation, Quaternion(Vector3.down(), rotationSpeed))
-                        rotated = true;
-                    }
+                        val rotationRatio: Float = 1.1f
 
-                    else if(deltaX < -rotationTrigger){
-                        currentNode.localRotation = Quaternion.multiply(currentNode.localRotation, Quaternion(Vector3.up(), rotationSpeed))
-                        rotated = true;
-                    }
+                        if (deltaX > rotationTrigger) { //finger dragging to left
+                            currentNode.localRotation = Quaternion.multiply(
+                                currentNode.localRotation,
+                                Quaternion(
+                                    Vector3.down(),
+                                    rotationSpeed * (deltaX.pow(rotationRatio))
+                                )
+                            )
 
-                    if(deltaY > rotationTrigger){
-                        currentNode.localRotation = Quaternion.multiply(currentNode.localRotation, Quaternion(Vector3.left(), rotationSpeed))
-                        rotated = true;
-                    }
+                            //Log.d("checking", (rotationSpeed * (deltaX.pow(rotationRatio))).toString())
+                            rotated = true;
+                        } else if (deltaX < -rotationTrigger) { //finger dragging to right
+                            currentNode.localRotation = Quaternion.multiply(
+                                currentNode.localRotation,
+                                Quaternion(
+                                    Vector3.up(),
+                                    rotationSpeed * ((-deltaX).pow(rotationRatio))
+                                )
+                            )
 
-                    else if(deltaY < -rotationTrigger){
-                        currentNode.localRotation = Quaternion.multiply(currentNode.localRotation, Quaternion(Vector3.right(), rotationSpeed))
-                        rotated = true;
+                            //Log.d("checking", (rotationSpeed * ((-deltaX).pow(rotationRatio))).toString())
+                            rotated = true;
+                        }
+
+                        if (deltaY > rotationTrigger) { //finger dragging to up
+                            currentNode.localRotation = Quaternion.multiply(
+                                currentNode.localRotation,
+                                Quaternion(
+                                    Vector3.left(),
+                                    rotationSpeed * (deltaY.pow(rotationRatio))
+                                )
+                            )
+
+                            //Log.d("checking", (rotationSpeed * ((deltaY).pow(rotationRatio))).toString())
+                            rotated = true;
+                        } else if (deltaY < -rotationTrigger) { //finger dragging to down
+                            currentNode.localRotation = Quaternion.multiply(
+                                currentNode.localRotation,
+                                Quaternion(
+                                    Vector3.right(),
+                                    rotationSpeed * ((-deltaY).pow(rotationRatio))
+                                )
+                            )
+
+                            //Log.d("checking", (rotationSpeed * ((-deltaY).pow(rotationRatio))).toString())
+                            rotated = true;
+                        }
+                    } else if (motionEvent.pointerCount == 2) {
+                        /*Log.d("checking", "Pointer index 0 X: " + motionEvent.getX(0).toString())
+                        Log.d("checking", "Pointer index 0 Y: " + motionEvent.getY(0).toString())
+                        Log.d("checking", "Pointer index 1 X: " + motionEvent.getX(1).toString())
+                        Log.d("checking", "Pointer index 1 Y: " + motionEvent.getY(1).toString())*/
+
+                        if (!distanceLatch) {
+                            originalDistance = sqrt(
+                                (motionEvent.getX(0) - motionEvent.getX(1)).pow(2) +
+                                        (motionEvent.getY(0) - motionEvent.getY(1)).pow(2)
+                            )
+                            distanceLatch = true
+                        }
+
+                        var deltaDistance: Float = sqrt(
+                            (motionEvent.getX(0) - motionEvent.getX(1)).pow(2) +
+                                    (motionEvent.getY(0) - motionEvent.getY(1)).pow(2)
+                        ) - originalDistance
+
+                        if (oldDeltaDistance == 0f)// 0 means oldDeltaDistance has not really been initialized yet
+                            oldDeltaDistance = deltaDistance
+
+                        if (oldPointer0x == -1f || oldPointer0y == -1f || oldPointer1x == -1f || oldPointer1y == -1f) {
+                            oldPointer0x = motionEvent.getX(0)
+                            oldPointer0y = motionEvent.getY(0)
+                            oldPointer1x = motionEvent.getX(1)
+                            oldPointer1y = motionEvent.getY(1)
+                        }
+
+                        /*Log.d("checking", "0x " + (motionEvent.getX(0) - oldPointer0x).toString())
+                        Log.d("checking", "1x " + (motionEvent.getX(1) - oldPointer1x).toString())
+                        Log.d("checking", "0y " + (motionEvent.getY(0) - oldPointer0y).toString())
+                        Log.d("checking", "1y " + (motionEvent.getY(1) - oldPointer1y).toString())*/
+
+                        if (!((motionEvent.getX(0) - oldPointer0x) > noise && (motionEvent.getX(1) - oldPointer1x) > noise)
+                            && !((motionEvent.getY(0) - oldPointer0y) > noise && (motionEvent.getY(1) - oldPointer1y) > noise)
+                            && !((motionEvent.getX(0) - oldPointer0x) < noise && (motionEvent.getX(1) - oldPointer1x) < noise)
+                            && !((motionEvent.getY(0) - oldPointer0y) < noise && (motionEvent.getY(1) - oldPointer1y) < noise)
+                        ) {
+                            if (deltaDistance - oldDeltaDistance < -deltaZoomTrigger) {
+                                Log.d(
+                                    "checking",
+                                    "new fea " + (deltaDistance - oldDeltaDistance).toString()
+                                )
+                                currentNode.localScale = currentNode.localScale.scaled(1 / scaling)
+                                Log.d("checking", "new scale " + currentNode.localScale)
+                            } else if (deltaDistance - oldDeltaDistance > deltaZoomTrigger) {
+                                Log.d(
+                                    "checking",
+                                    "new fea " + (deltaDistance - oldDeltaDistance).toString()
+                                )
+                                currentNode.localScale = currentNode.localScale.scaled(scaling)
+                                Log.d("checking", "new scale " + currentNode.localScale)
+                            }
+
+                        }
+                        oldPointer0x = motionEvent.getX(0)
+                        oldPointer0y = motionEvent.getY(0)
+                        oldPointer1x = motionEvent.getX(1)
+                        oldPointer1y = motionEvent.getY(1)
+                        oldDeltaDistance = deltaDistance
                     }
                 }
             }
