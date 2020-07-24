@@ -16,6 +16,7 @@ import com.google.ar.sceneform.math.Vector3
 import com.google.ar.sceneform.rendering.ModelRenderable
 import kotlinx.android.synthetic.main.act_main.*
 import java.util.concurrent.CompletableFuture
+import kotlin.math.absoluteValue
 import kotlin.math.pow
 import kotlin.math.sqrt
 
@@ -45,9 +46,14 @@ class MainAct : AppCompatActivity() {
     private var small: Boolean = true
     private var rotated: Boolean = false
     private val rotationTrigger: Float = 30f
+    private val rotationSpeed: Float = 0.005f
+    private val rotationRatio: Float = 1.1f
+    private var rotationLatch: Boolean = true
+    private var timerLatch: Boolean = false
     //^^^ for rotation
 
-    private var originalDistance: Float = 0f
+    private var originalDistance: Float = -1f
+    private var deltaDistance: Float = 0f
     private var distanceLatch: Boolean = false
     private var oldDeltaDistance: Float = 0f
     private val deltaZoomTrigger: Float = 3f //sensitive
@@ -56,8 +62,17 @@ class MainAct : AppCompatActivity() {
     private var oldPointer0y: Float = -1f
     private var oldPointer1x: Float = -1f
     private var oldPointer1y: Float = -1f
-    private val noise: Float = 0.5f
     //^^^ for zooming
+
+
+    private val zoomingNoise: Float = 0.03f //in zooming meeting 0.1 was used
+    private var zoomingLatch: Boolean = true
+    private var movingLactch: Boolean = true
+    //^^^ for both zooming and moving
+
+    private val movingNoise: Float = 0.5f
+    private val movingSpeed: Float = 0.045f//0.035 0.003
+    //^^^ for moving
 
     //^^^^ for OnTouchListener
 
@@ -250,7 +265,6 @@ class MainAct : AppCompatActivity() {
             var deltaX: Float
             var deltaY: Float
 
-
             when (motionEvent.action) {
                 MotionEvent.ACTION_DOWN -> {
                     pressTime = motionEvent.eventTime
@@ -278,15 +292,22 @@ class MainAct : AppCompatActivity() {
                         rotated = false
                         distanceLatch = false
                     }
+                    rotationLatch = true
+                    zoomingLatch = true
+                    movingLactch = true  //^^^ unlock/reset all latch
+                    timerLatch = false //reset timerLatch
                 }
                 MotionEvent.ACTION_MOVE -> {
                     //Log.d("checking", motionEvent.pointerCount.toString())
-                    if (motionEvent.pointerCount == 1) {
+                    if(SystemClock.uptimeMillis() - pressTime > 100){
+                        timerLatch = true //if there is ONLY 1 finger after 100ms (0.1s), then rotation (1 finger) is enabled
+                    }                     //if second finger is touching the model within 100ms, it considers as 2 fingers gesture and disable rotation (1 finger gesture)
+                                          //basically it is a buffer time for using 2-finger gesture
+                                          //otherwise, 1 finger rotation is easily misleded
+                    
+                    if (motionEvent.pointerCount == 1 && rotationLatch && timerLatch) {
                         deltaX = originalX - motionEvent.x
                         deltaY = originalY - motionEvent.y
-                        val rotationSpeed: Float = 0.005f
-
-                        val rotationRatio: Float = 1.1f
 
                         if (deltaX > rotationTrigger) { //finger dragging to left
                             currentNode.localRotation = Quaternion.multiply(
@@ -341,6 +362,8 @@ class MainAct : AppCompatActivity() {
                         Log.d("checking", "Pointer index 1 X: " + motionEvent.getX(1).toString())
                         Log.d("checking", "Pointer index 1 Y: " + motionEvent.getY(1).toString())*/
 
+                        rotationLatch = false
+
                         if (!distanceLatch) {
                             originalDistance = sqrt(
                                 (motionEvent.getX(0) - motionEvent.getX(1)).pow(2) +
@@ -349,12 +372,12 @@ class MainAct : AppCompatActivity() {
                             distanceLatch = true
                         }
 
-                        var deltaDistance: Float = sqrt(
+                        deltaDistance = sqrt(
                             (motionEvent.getX(0) - motionEvent.getX(1)).pow(2) +
                                     (motionEvent.getY(0) - motionEvent.getY(1)).pow(2)
                         ) - originalDistance
 
-                        if (oldDeltaDistance == 0f)// 0 means oldDeltaDistance has not really been initialized yet
+                        if (oldDeltaDistance == -1f)// 0 means oldDeltaDistance has not really been initialized yet
                             oldDeltaDistance = deltaDistance
 
                         if (oldPointer0x == -1f || oldPointer0y == -1f || oldPointer1x == -1f || oldPointer1y == -1f) {
@@ -369,11 +392,14 @@ class MainAct : AppCompatActivity() {
                         Log.d("checking", "0y " + (motionEvent.getY(0) - oldPointer0y).toString())
                         Log.d("checking", "1y " + (motionEvent.getY(1) - oldPointer1y).toString())*/
 
-                        if (!((motionEvent.getX(0) - oldPointer0x) > noise && (motionEvent.getX(1) - oldPointer1x) > noise)
-                            && !((motionEvent.getY(0) - oldPointer0y) > noise && (motionEvent.getY(1) - oldPointer1y) > noise)
-                            && !((motionEvent.getX(0) - oldPointer0x) < noise && (motionEvent.getX(1) - oldPointer1x) < noise)
-                            && !((motionEvent.getY(0) - oldPointer0y) < noise && (motionEvent.getY(1) - oldPointer1y) < noise)
+                        if (zoomingLatch
+                            &&!((motionEvent.getX(0) - oldPointer0x) > zoomingNoise && (motionEvent.getX(1) - oldPointer1x) > zoomingNoise)
+                            && !((motionEvent.getY(0) - oldPointer0y) > zoomingNoise && (motionEvent.getY(1) - oldPointer1y) > zoomingNoise)
+                            && !((motionEvent.getX(0) - oldPointer0x) < -zoomingNoise && (motionEvent.getX(1) - oldPointer1x) < -zoomingNoise)
+                            && !((motionEvent.getY(0) - oldPointer0y) < -zoomingNoise && (motionEvent.getY(1) - oldPointer1y) < -zoomingNoise)
                         ) {
+                            movingLactch = false
+
                             if (deltaDistance - oldDeltaDistance < -deltaZoomTrigger) {
                                 Log.d(
                                     "checking",
@@ -389,8 +415,31 @@ class MainAct : AppCompatActivity() {
                                 currentNode.localScale = currentNode.localScale.scaled(scaling)
                                 Log.d("checking", "new scale " + currentNode.localScale)
                             }
-
                         }
+
+                        else if(movingLactch){
+                            if((motionEvent.getX(0) - oldPointer0x) > movingNoise && (motionEvent.getX(1) - oldPointer1x) > movingNoise){ //moving right
+                                currentNode.localPosition = Vector3.add(currentNode.localPosition, Vector3(movingSpeed, 0f, 0f))
+                                zoomingLatch = false
+                            }
+
+                            if((motionEvent.getX(0) - oldPointer0x) < -movingNoise && (motionEvent.getX(1) - oldPointer1x) < -movingNoise){ //moving left
+                                currentNode.localPosition = Vector3.add(currentNode.localPosition, Vector3(-movingSpeed, 0f, 0f))
+                                zoomingLatch = false
+                            }
+
+                            if((motionEvent.getY(0) - oldPointer0y) > movingNoise && (motionEvent.getY(1) - oldPointer1y) > movingNoise){ //moving up
+                                currentNode.localPosition = Vector3.add(currentNode.localPosition, Vector3(0f, -movingSpeed, 0f))
+                                zoomingLatch = false
+                            }
+
+                            if((motionEvent.getY(0) - oldPointer0y) < -movingNoise && (motionEvent.getY(1) - oldPointer1y) < -movingNoise){//moving down
+                                currentNode.localPosition = Vector3.add(currentNode.localPosition, Vector3(0f, movingSpeed, 0f))
+                                zoomingLatch = false
+                            }
+                        }
+
+
                         oldPointer0x = motionEvent.getX(0)
                         oldPointer0y = motionEvent.getY(0)
                         oldPointer1x = motionEvent.getX(1)
