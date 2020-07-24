@@ -304,7 +304,7 @@ class MainAct : AppCompatActivity() {
                     }                     //if second finger is touching the model within 100ms, it considers as 2 fingers gesture and disable rotation (1 finger gesture)
                                           //basically it is a buffer time for using 2-finger gesture
                                           //otherwise, 1 finger rotation is easily misleded
-                    
+
                     if (motionEvent.pointerCount == 1 && rotationLatch && timerLatch) {
                         deltaX = originalX - motionEvent.x
                         deltaY = originalY - motionEvent.y
@@ -401,19 +401,13 @@ class MainAct : AppCompatActivity() {
                             movingLactch = false
 
                             if (deltaDistance - oldDeltaDistance < -deltaZoomTrigger) {
-                                Log.d(
-                                    "checking",
-                                    "new fea " + (deltaDistance - oldDeltaDistance).toString()
-                                )
+                                //Log.d( "checking", "new fea " + (deltaDistance - oldDeltaDistance).toString() )
                                 currentNode.localScale = currentNode.localScale.scaled(1 / scaling)
-                                Log.d("checking", "new scale " + currentNode.localScale)
+                                //Log.d("checking", "new scale " + currentNode.localScale)
                             } else if (deltaDistance - oldDeltaDistance > deltaZoomTrigger) {
-                                Log.d(
-                                    "checking",
-                                    "new fea " + (deltaDistance - oldDeltaDistance).toString()
-                                )
+                                //Log.d("checking", "new fea " + (deltaDistance - oldDeltaDistance).toString())
                                 currentNode.localScale = currentNode.localScale.scaled(scaling)
-                                Log.d("checking", "new scale " + currentNode.localScale)
+                                //Log.d("checking", "new scale " + currentNode.localScale)
                             }
                         }
 
