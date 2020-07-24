@@ -65,12 +65,12 @@ class MainAct : AppCompatActivity() {
     //^^^ for zooming
 
 
-    private val zoomingNoise: Float = 0.03f //in zooming meeting 0.1 was used
+    private val zoomingNoise: Float = 0.01f //in zooming meeting 0.1 was used
     private var zoomingLatch: Boolean = true
     private var movingLactch: Boolean = true
     //^^^ for both zooming and moving
 
-    private val movingNoise: Float = 0.5f
+    private val movingNoise: Float = 1.0f
     private val movingSpeed: Float = 0.045f//0.035 0.003
     //^^^ for moving
 
