@@ -1,2 +1,2 @@
-# rendering_scene_without_ar_camera-master
+# Prototype of 3d model
  Displaying 3d models (able to change texture)
