@@ -1,8 +1,5 @@
-package com.yudiz.rederingwithoutar
+package com.prototype.prototype3d
 
-//vvv added this two
-
-import android.content.res.Resources
 import android.net.Uri
 import android.os.Bundle
 import android.os.SystemClock
@@ -16,9 +13,9 @@ import com.google.ar.sceneform.math.Vector3
 import com.google.ar.sceneform.rendering.ModelRenderable
 import kotlinx.android.synthetic.main.act_main.*
 import java.util.concurrent.CompletableFuture
-import kotlin.math.absoluteValue
 import kotlin.math.pow
 import kotlin.math.sqrt
+
 
 
 class MainAct : AppCompatActivity() {
@@ -30,20 +27,30 @@ class MainAct : AppCompatActivity() {
     private lateinit var materialFuture: CompletableFuture<CustomMaterial>
     private lateinit var customMaterial: CustomMaterial
 
-    private lateinit var currentNode: Node
-
     private lateinit var colorButtonText: String
     private lateinit var metallicButtonText: String
     private lateinit var roughnessButtonText: String
     private lateinit var normalButtonText: String
     private lateinit var resetMaterialButtonText: String
+    private var modelToggle: Boolean = true
+
+    private lateinit var modelManager: ModelManager
+
+    private lateinit var cube: Node
+    private lateinit var cup: Node
+
+    private var selectPressed: Boolean = false
+
+    //^^^
+
+    //vvvvv
+    private var selectedName: String = ""
 
     private var originalX: Float = 0f
     private var originalY: Float = 0f
+    var deltaX: Float = 0f
+    var deltaY: Float = 0f
     private var pressTime: Long = 0
-    private var releaseTime: Long = 0
-    private val scalingTimeMs: Long = 3000 //3 seconds
-    private var small: Boolean = true
     private var rotated: Boolean = false
     private val rotationTrigger: Float = 30f
     private val rotationSpeed: Float = 0.005f
@@ -73,9 +80,8 @@ class MainAct : AppCompatActivity() {
     private val movingNoise: Float = 1.0f
     private val movingSpeed: Float = 0.045f//0.035 0.003
     //^^^ for moving
-
     //^^^^ for OnTouchListener
-
+    //^^^^^
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.act_main)
@@ -89,13 +95,42 @@ class MainAct : AppCompatActivity() {
             normalSource = Uri.parse("textures/cube_normal.jpg")
         }
 
-        renderCube()
+        modelManager = ModelManager(this, sceneView.scene, 5)
+
+         cup = modelManager.createNode(
+            "cup",
+            "coffee_cup.sfb",
+            true,
+            Vector3(0f, -2f, -7f),
+            Vector3(3f, 3f, 3f)
+        )
+
+        Log.d("checking", "MAIN cup: " + cup.toString())
+
+         cube = modelManager.createNode(
+            "cube",
+            "cube.sfb",
+            false,
+            Vector3(0f, -2f, -5f),
+            Vector3(4f, 4f, 4f),
+            Quaternion.axisAngle(Vector3(1f, -3.5f, 0f), 10f)
+        )
+
+        Log.d("checking", "MAIN cube: " + cube.toString())
+
+        renderableFuture = modelManager.getRenderableFuture()
+
+        renderableFuture.thenAcceptBoth(materialFuture) { renderableResult, materialResult ->
+            customMaterial = materialResult
+            renderableModel = renderableResult
+            renderableModel.material = customMaterial.value
+        }
 
         colorButton.setOnClickListener {
             customMaterial.switchBaseColor()
-            if (customMaterial.isDefaultBaseColorMap) {
+            if (customMaterial.isDefaultBaseColorMap)
                 colorButton.setText(R.string.set_color)
-            } else
+            else
                 colorButton.setText(R.string.reset_color)
         }
 
@@ -123,189 +158,66 @@ class MainAct : AppCompatActivity() {
                 normalButton.setText(R.string.reset_normal)
         }
 
+        //resetMaterialButton.setText("Selecting: " + modelManager.getNode(modelManager.getSelectedIndex()).name)
+        resetMaterialButton.setText("Press me to select model (default cube)")
+        Log.d("checking", "Selecting"  + modelManager.getNode(modelManager.getSelectedIndex()).toString())
         resetMaterialButton.setOnClickListener {
-            customMaterial.reset()
+            /*customMaterial.reset()
             colorButton.setText(R.string.set_color)
             metallicButton.setText(R.string.set_metallic)
             roughnessButton.setText(R.string.set_roughness)
-            normalButton.setText(R.string.set_normal)
+            normalButton.setText(R.string.set_normal)*/
+
+            modelManager.selectNext()
+            resetMaterialButton.setText("Selecting: " + modelManager.getNode(modelManager.getSelectedIndex()).name)
+            Log.d("checking", modelManager.getNode(modelManager.getSelectedIndex()).toString())
         }
 
+        changeModelButton.setText("Add Cube")
         changeModelButton.setOnClickListener {
-            if (currentNode.name == "cube")
-                renderCup()
-            else
-                renderCube()
-        }
-    }
-
-    private fun renderCube() {
-        renderableFuture = ModelRenderable.builder()
-            .setSource(this, Uri.parse("cube.sfb"))
-            .build()
-
-        if (::currentNode.isInitialized)
-            scene.removeChild(currentNode)
-
-        renderableFuture.thenAccept { addNodeCube(it) }
-
-        renderableFuture.thenAcceptBoth(materialFuture) { renderableResult, materialResult ->
-            customMaterial = materialResult
-            renderableModel = renderableResult
-            renderableModel.material = customMaterial.value
-        }
-
-        //enableButton()
-    }
-
-    //for cup
-    private fun renderCup() {
-        renderableFuture = ModelRenderable.builder()
-            .setSource(this, Uri.parse("coffee_cup.sfb"))
-            .build()
-
-        if (::currentNode.isInitialized)
-            scene.removeChild(currentNode)
-
-        renderableFuture.thenAccept { addNodeCup(it) }
-
-        //disableButton()
-    }
-
-    //for cube
-    private fun addNodeCube(model: ModelRenderable?) {
-        Log.d("checking", model.toString())
-
-        small = true
-
-        model?.let {
-            currentNode = Node().apply {
-                setParent(scene)
-                localPosition = Vector3(0f, -2f, -5f)
-                localScale = Vector3(4f, 4f, 4f)
-                renderable = it
-                localRotation = Quaternion.axisAngle(Vector3(1f, -3.5f, 0f), 10f)
-                name = "cube"
+            Log.d("checking", "BUTTON" + cube.toString())
+            if (!modelToggle){
+                changeModelButton.setText("Add Cube")
+                scene.removeChild(cube)
             }
-            //setOnTouchListener
-            setNewOnTouchListening(currentNode)
-            scene.addChild(currentNode)
-        }
-    }
 
-    //for cup
-    private fun addNodeCup(model: ModelRenderable?) {
-        Log.d("checking", model.toString())
-
-        small = true
-
-        model?.let {
-            currentNode = Node().apply {
-                setParent(scene)
-                localPosition = Vector3(0f, -2f, -7f)
-                localScale = Vector3(3f, 3f, 3f)
-                renderable = it
-                name = "cup"
+            else{
+                changeModelButton.setText("Remove Cube")
+                scene.addChild(cube)
             }
-            //setOnTouchListener
-            setNewOnTouchListening(currentNode)
-            scene.addChild(currentNode)
+
+            modelToggle = !modelToggle
         }
-    }
 
-    private fun disableButton() {
-        colorButton.isEnabled = false
-        metallicButton.isEnabled = false
-        roughnessButton.isEnabled = false
-        normalButton.isEnabled = false
-        resetMaterialButton.isEnabled = false
-
-
-        colorButton.isClickable = false
-        metallicButton.isClickable = false
-        roughnessButton.isClickable = false
-        normalButton.isClickable = false
-        resetMaterialButton.isClickable = false
-
-        colorButtonText = colorButton.text.toString()
-        metallicButtonText = metallicButton.text.toString()
-        roughnessButtonText = roughnessButton.text.toString()
-        normalButtonText = normalButton.text.toString()
-        resetMaterialButtonText = resetMaterialButton.text.toString()
-
-        colorButton.text = ""
-        metallicButton.text = ""
-        roughnessButton.text = ""
-        normalButton.text = ""
-        resetMaterialButton.text = ""
-    }
-
-    private fun enableButton() {
-        colorButton.isEnabled = true
-        metallicButton.isEnabled = true
-        roughnessButton.isEnabled = true
-        normalButton.isEnabled = true
-        resetMaterialButton.isEnabled = true
-
-        colorButton.isClickable = true
-        metallicButton.isClickable = true
-        roughnessButton.isClickable = true
-        normalButton.isClickable = true
-        resetMaterialButton.isClickable = true
-
-        colorButton.text = colorButtonText
-        metallicButton.text = metallicButtonText
-        roughnessButton.text = roughnessButtonText
-        normalButton.text = normalButtonText
-        resetMaterialButton.text = resetMaterialButtonText
-    }
-
-    private fun setNewOnTouchListening(currentNode: Node) {
-        currentNode.setOnTouchListener { hitTestResult, motionEvent ->
-            var deltaX: Float
-            var deltaY: Float
-
+        scene.setOnTouchListener{hitTestResult, motionEvent ->
+            val currentNode: Node = modelManager.getNode(modelManager.getSelectedIndex())
+            Log.d("checking", "LISTENER" + modelManager.getNode(modelManager.getSelectedIndex()).toString())
             when (motionEvent.action) {
                 MotionEvent.ACTION_DOWN -> {
+                    if(selectedName == "")
+                        selectedName = currentNode.name
                     pressTime = motionEvent.eventTime
                     Log.d("checking", pressTime.toString())
                     originalX = motionEvent.x
                     originalY = motionEvent.y
                 }
                 MotionEvent.ACTION_UP -> {
-                    if (motionEvent.pointerCount == 1 && false) { //touch and hold 3 sec to toggle scale (temp feature so not run)
-                        releaseTime = SystemClock.uptimeMillis()
-                        if ((releaseTime - pressTime) > scalingTimeMs && !rotated) {
-                            if (currentNode.name == "cube") {
-                                if (small)
-                                    currentNode.localScale = Vector3(6f, 6f, 6f)
-                                else
-                                    currentNode.localScale = Vector3(4f, 4f, 4f)
-                            } else if (currentNode.name == "cup") {
-                                if (small)
-                                    currentNode.localScale = Vector3(5f, 5f, 5f)
-                                else
-                                    currentNode.localScale = Vector3(3f, 3f, 3f)
-                            }
-                            small = !small
-                        }
-                        rotated = false
-                        distanceLatch = false
-                    }
                     rotationLatch = true
                     zoomingLatch = true
                     movingLactch = true  //^^^ unlock/reset all latch
                     timerLatch = false //reset timerLatch
+                    selectedName = ""
                 }
                 MotionEvent.ACTION_MOVE -> {
                     //Log.d("checking", motionEvent.pointerCount.toString())
-                    if(SystemClock.uptimeMillis() - pressTime > 100){
-                        timerLatch = true //if there is ONLY 1 finger after 100ms (0.1s), then rotation (1 finger) is enabled
+                    if (SystemClock.uptimeMillis() - pressTime > 100) {
+                        timerLatch =
+                            true //if there is ONLY 1 finger after 100ms (0.1s), then rotation (1 finger) is enabled
                     }                     //if second finger is touching the model within 100ms, it considers as 2 fingers gesture and disable rotation (1 finger gesture)
-                                          //basically it is a buffer time for using 2-finger gesture
-                                          //otherwise, 1 finger rotation is easily misleded
+                    //basically it is a buffer time for using 2-finger gesture
+                    //otherwise, 1 finger rotation is easily misleded
 
-                    if (motionEvent.pointerCount == 1 && rotationLatch && timerLatch) {
+                    if (motionEvent.pointerCount == 1 && rotationLatch && timerLatch && selectedName == currentNode.name) {
                         deltaX = originalX - motionEvent.x
                         deltaY = originalY - motionEvent.y
 
@@ -356,7 +268,7 @@ class MainAct : AppCompatActivity() {
                             //Log.d("checking", (rotationSpeed * ((-deltaY).pow(rotationRatio))).toString())
                             rotated = true;
                         }
-                    } else if (motionEvent.pointerCount == 2) {
+                    } else if (motionEvent.pointerCount == 2 && selectedName == currentNode.name) {
                         /*Log.d("checking", "Pointer index 0 X: " + motionEvent.getX(0).toString())
                         Log.d("checking", "Pointer index 0 Y: " + motionEvent.getY(0).toString())
                         Log.d("checking", "Pointer index 1 X: " + motionEvent.getX(1).toString())
@@ -393,10 +305,18 @@ class MainAct : AppCompatActivity() {
                         Log.d("checking", "1y " + (motionEvent.getY(1) - oldPointer1y).toString())*/
 
                         if (zoomingLatch
-                            &&!((motionEvent.getX(0) - oldPointer0x) > zoomingNoise && (motionEvent.getX(1) - oldPointer1x) > zoomingNoise)
-                            && !((motionEvent.getY(0) - oldPointer0y) > zoomingNoise && (motionEvent.getY(1) - oldPointer1y) > zoomingNoise)
-                            && !((motionEvent.getX(0) - oldPointer0x) < -zoomingNoise && (motionEvent.getX(1) - oldPointer1x) < -zoomingNoise)
-                            && !((motionEvent.getY(0) - oldPointer0y) < -zoomingNoise && (motionEvent.getY(1) - oldPointer1y) < -zoomingNoise)
+                            && !((motionEvent.getX(0) - oldPointer0x) > zoomingNoise && (motionEvent.getX(
+                                1
+                            ) - oldPointer1x) > zoomingNoise)
+                            && !((motionEvent.getY(0) - oldPointer0y) > zoomingNoise && (motionEvent.getY(
+                                1
+                            ) - oldPointer1y) > zoomingNoise)
+                            && !((motionEvent.getX(0) - oldPointer0x) < -zoomingNoise && (motionEvent.getX(
+                                1
+                            ) - oldPointer1x) < -zoomingNoise)
+                            && !((motionEvent.getY(0) - oldPointer0y) < -zoomingNoise && (motionEvent.getY(
+                                1
+                            ) - oldPointer1y) < -zoomingNoise)
                         ) {
                             movingLactch = false
 
@@ -409,26 +329,48 @@ class MainAct : AppCompatActivity() {
                                 currentNode.localScale = currentNode.localScale.scaled(scaling)
                                 //Log.d("checking", "new scale " + currentNode.localScale)
                             }
-                        }
-
-                        else if(movingLactch){
-                            if((motionEvent.getX(0) - oldPointer0x) > movingNoise && (motionEvent.getX(1) - oldPointer1x) > movingNoise){ //moving right
-                                currentNode.localPosition = Vector3.add(currentNode.localPosition, Vector3(movingSpeed, 0f, 0f))
+                        } else if (movingLactch) {
+                            if ((motionEvent.getX(0) - oldPointer0x) > movingNoise && (motionEvent.getX(
+                                    1
+                                ) - oldPointer1x) > movingNoise
+                            ) { //moving right
+                                currentNode.localPosition = Vector3.add(
+                                    currentNode.localPosition,
+                                    Vector3(movingSpeed, 0f, 0f)
+                                )
                                 zoomingLatch = false
                             }
 
-                            if((motionEvent.getX(0) - oldPointer0x) < -movingNoise && (motionEvent.getX(1) - oldPointer1x) < -movingNoise){ //moving left
-                                currentNode.localPosition = Vector3.add(currentNode.localPosition, Vector3(-movingSpeed, 0f, 0f))
+                            if ((motionEvent.getX(0) - oldPointer0x) < -movingNoise && (motionEvent.getX(
+                                    1
+                                ) - oldPointer1x) < -movingNoise
+                            ) { //moving left
+                                currentNode.localPosition = Vector3.add(
+                                    currentNode.localPosition,
+                                    Vector3(-movingSpeed, 0f, 0f)
+                                )
                                 zoomingLatch = false
                             }
 
-                            if((motionEvent.getY(0) - oldPointer0y) > movingNoise && (motionEvent.getY(1) - oldPointer1y) > movingNoise){ //moving up
-                                currentNode.localPosition = Vector3.add(currentNode.localPosition, Vector3(0f, -movingSpeed, 0f))
+                            if ((motionEvent.getY(0) - oldPointer0y) > movingNoise && (motionEvent.getY(
+                                    1
+                                ) - oldPointer1y) > movingNoise
+                            ) { //moving up
+                                currentNode.localPosition = Vector3.add(
+                                    currentNode.localPosition,
+                                    Vector3(0f, -movingSpeed, 0f)
+                                )
                                 zoomingLatch = false
                             }
 
-                            if((motionEvent.getY(0) - oldPointer0y) < -movingNoise && (motionEvent.getY(1) - oldPointer1y) < -movingNoise){//moving down
-                                currentNode.localPosition = Vector3.add(currentNode.localPosition, Vector3(0f, movingSpeed, 0f))
+                            if ((motionEvent.getY(0) - oldPointer0y) < -movingNoise && (motionEvent.getY(
+                                    1
+                                ) - oldPointer1y) < -movingNoise
+                            ) {//moving down
+                                currentNode.localPosition = Vector3.add(
+                                    currentNode.localPosition,
+                                    Vector3(0f, movingSpeed, 0f)
+                                )
                                 zoomingLatch = false
                             }
                         }
@@ -444,6 +386,54 @@ class MainAct : AppCompatActivity() {
             }
             true
         }
+    }
+
+
+    private fun disableButton() {
+        colorButton.isEnabled = false
+        metallicButton.isEnabled = false
+        roughnessButton.isEnabled = false
+        normalButton.isEnabled = false
+        resetMaterialButton.isEnabled = false
+
+
+        colorButton.isClickable = false
+        metallicButton.isClickable = false
+        roughnessButton.isClickable = false
+        normalButton.isClickable = false
+        resetMaterialButton.isClickable = false
+
+        colorButtonText = colorButton.text.toString()
+        metallicButtonText = metallicButton.text.toString()
+        roughnessButtonText = roughnessButton.text.toString()
+        normalButtonText = normalButton.text.toString()
+        resetMaterialButtonText = resetMaterialButton.text.toString()
+
+        colorButton.text = ""
+        metallicButton.text = ""
+        roughnessButton.text = ""
+        normalButton.text = ""
+        resetMaterialButton.text = ""
+    }
+
+    private fun enableButton() {
+        colorButton.isEnabled = true
+        metallicButton.isEnabled = true
+        roughnessButton.isEnabled = true
+        normalButton.isEnabled = true
+        resetMaterialButton.isEnabled = true
+
+        colorButton.isClickable = true
+        metallicButton.isClickable = true
+        roughnessButton.isClickable = true
+        normalButton.isClickable = true
+        resetMaterialButton.isClickable = true
+
+        colorButton.text = colorButtonText
+        metallicButton.text = metallicButtonText
+        roughnessButton.text = roughnessButtonText
+        normalButton.text = normalButtonText
+        resetMaterialButton.text = resetMaterialButtonText
     }
 
     override fun onPause() {

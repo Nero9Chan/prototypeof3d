@@ -7,7 +7,7 @@ apply plugin: 'kotlin-android-extensions'
 android {
     compileSdkVersion 28
     defaultConfig {
-        applicationId "com.yudiz.rederingwithoutar"
+        applicationId "com.prototype.prototype3d"
         minSdkVersion 24
         targetSdkVersion 28
         versionCode 1
@@ -36,8 +36,3 @@ dependencies {
 }
 
 apply plugin: 'com.google.ar.sceneform.plugin'
-
-sceneform.asset('sampledata/Coffee Cup_final.obj',
-        'default',
-        'sampledata/Coffee Cup_final.sfa',
-        'src/main/assets/Coffee Cup_final')

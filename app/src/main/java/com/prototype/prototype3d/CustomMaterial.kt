@@ -1,4 +1,4 @@
-package com.yudiz.rederingwithoutar
+package com.prototype.prototype3d
 
 import android.content.Context
 import android.net.Uri
@@ -36,6 +36,7 @@ class CustomMaterial private constructor(
         private set
 
     init {
+        Log.d("checking", "static")
         isDefaultBaseColorMap = true
         isDefaultMetallicMap = true
         isDefaultRoughnessMap = true

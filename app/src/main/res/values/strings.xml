@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">RederingWithoutAR</string>
+    <string name="app_name">3D model prototype</string>
     <string name="color_text">Color</string>
     <string name="metallic_text">Metallic</string>
     <string name="roughness_text">Roughness</string>
