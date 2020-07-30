@@ -1,0 +1,53 @@
+{
+  materials: [
+    {
+      name: 'curtain_cloth_obj_',
+      parameters: [
+        {
+          baseColor: 'fabric',
+        },
+        {
+          baseColorTint: [
+            0.58799999999999997,
+            0.58799999999999997,
+            0.58799999999999997,
+            1,
+          ],
+        },
+        {
+          metallic: 1,
+        },
+        {
+          roughness: 0.408248,
+        },
+        {
+          opacity: null,
+        },
+      ],
+      source: 'build/sceneform_sdk/default_materials/obj_material.sfm',
+    },
+  ],
+  model: {
+    attributes: [
+      'Position',
+      'TexCoord',
+      'Orientation',
+    ],
+    collision: {},
+    file: 'sampledata/curtain.obj',
+    name: 'curtain',
+    recenter: 'root',
+    scale: 0.0023270000000000001,
+  },
+  samplers: [
+    {
+      file: 'sampledata\\fabric.jpg',
+      name: 'fabric',
+      params: {
+        usage_type: 'Data',
+      },
+      pipeline_name: 'fabric.jpg',
+    },
+  ],
+  version: '0.52:1',
+}

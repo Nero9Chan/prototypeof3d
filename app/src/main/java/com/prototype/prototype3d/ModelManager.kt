@@ -181,6 +181,7 @@ class ModelManager {
                     movingLactch = true  //^^^ unlock/reset all latch
                     timerLatch = false //reset timerLatch
                     selectedName = ""
+                    Log.d("checking", currentNode.localRotation.toString())
                 }
                 MotionEvent.ACTION_MOVE -> {
                     //Log.d("checking", motionEvent.pointerCount.toString())

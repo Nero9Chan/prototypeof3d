@@ -36,3 +36,8 @@ dependencies {
 }
 
 apply plugin: 'com.google.ar.sceneform.plugin'
+
+sceneform.asset('sampledata/curtain.obj', // 'Source Asset Path' specified during import.
+        'default',                            // 'Material Path' specified during import.
+        'sampledata/curtain.sfa',         // '.sfa Output Path' specified during import.
+        'src/main/res/raw/curtain')              // '.sfb Output Path' specified during import.

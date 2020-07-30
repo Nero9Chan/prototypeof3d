@@ -1,5 +1,6 @@
 package com.prototype.prototype3d
 
+import android.graphics.PixelFormat
 import android.net.Uri
 import android.os.Bundle
 import android.os.SystemClock
@@ -15,7 +16,6 @@ import kotlinx.android.synthetic.main.act_main.*
 import java.util.concurrent.CompletableFuture
 import kotlin.math.pow
 import kotlin.math.sqrt
-
 
 
 class MainAct : AppCompatActivity() {
@@ -38,6 +38,7 @@ class MainAct : AppCompatActivity() {
 
     private lateinit var cube: Node
     private lateinit var cup: Node
+    private lateinit var curtain: Node
 
     private var selectPressed: Boolean = false
 
@@ -79,6 +80,7 @@ class MainAct : AppCompatActivity() {
 
     private val movingNoise: Float = 1.0f
     private val movingSpeed: Float = 0.045f//0.035 0.003
+
     //^^^ for moving
     //^^^^ for OnTouchListener
     //^^^^^
@@ -87,6 +89,9 @@ class MainAct : AppCompatActivity() {
         setContentView(R.layout.act_main)
 
         scene = sceneView.scene
+        //sceneView.setZOrderOnTop(true)
+        /*var sceneHolder = sceneView.holder
+        sceneHolder.setFormat(PixelFormat.TRANSPARENT)*/
 
         materialFuture = CustomMaterial.build(this) {
             baseColorSource = Uri.parse("textures/cube_diffuse.jpg")
@@ -97,17 +102,24 @@ class MainAct : AppCompatActivity() {
 
         modelManager = ModelManager(this, sceneView.scene, 5)
 
-         cup = modelManager.createNode(
-            "cup",
-            "coffee_cup.sfb",
-            true,
-            Vector3(0f, -2f, -7f),
-            Vector3(3f, 3f, 3f)
-        )
+        /*cup = modelManager.createNode(
+           "cup",
+           "coffee_cup.sfb",
+           false,
+           Vector3(0f, -2f, -7f),
+           Vector3(3f, 3f, 3f)
+       )
 
-        Log.d("checking", "MAIN cup: " + cup.toString())
+       Log.d("checking", "MAIN cup: " + cup.toString())*/
 
-         cube = modelManager.createNode(
+        materialFuture = CustomMaterial.build(this) {
+            baseColorSource = Uri.parse("textures/fabric_bump.jpg")
+            metallicSource = Uri.parse("textures/fabric_dark.jpg")
+            roughnessSource = Uri.parse("textures/fabric_mask.jpg")
+            normalSource = Uri.parse("textures/fabric_sc.jpg")
+        }
+
+        cube = modelManager.createNode(
             "cube",
             "cube.sfb",
             false,
@@ -118,6 +130,33 @@ class MainAct : AppCompatActivity() {
 
         Log.d("checking", "MAIN cube: " + cube.toString())
 
+        /*renderableFuture = modelManager.getRenderableFuture()
+
+        renderableFuture.thenAcceptBoth(materialFuture) { renderableResult, materialResult ->
+            customMaterial = materialResult
+            renderableModel = renderableResult
+            renderableModel.material = customMaterial.value
+        }*/
+
+
+        curtain = modelManager.createNode(
+            "curtain",
+            "curtain.sfb",
+            true,
+            Vector3(0f, -5f, -20f),
+            Vector3(3f, 3f, 3f),
+            Quaternion.axisAngle(Vector3(0f, 40f, 0f), 40f)
+        )
+
+        /*curtain = modelManager.createNode(
+            "curtain",
+            "curtain.sfb",
+            true,
+            Vector3(0f, 0f, 0f),
+            Vector3(3f, 3f, 3f),
+            Quaternion.axisAngle(Vector3(0f, 0f, 0f), 0f)
+        )*/
+
         renderableFuture = modelManager.getRenderableFuture()
 
         renderableFuture.thenAcceptBoth(materialFuture) { renderableResult, materialResult ->
@@ -125,6 +164,9 @@ class MainAct : AppCompatActivity() {
             renderableModel = renderableResult
             renderableModel.material = customMaterial.value
         }
+
+
+        // Log.d("checking", "QUATERNION " + Quaternion.axisAngle(Vector3(0f, 20f, 0f), 10f))
 
         colorButton.setOnClickListener {
             customMaterial.switchBaseColor()
@@ -160,7 +202,10 @@ class MainAct : AppCompatActivity() {
 
         //resetMaterialButton.setText("Selecting: " + modelManager.getNode(modelManager.getSelectedIndex()).name)
         resetMaterialButton.setText("Press me to select model (default cube)")
-        Log.d("checking", "Selecting"  + modelManager.getNode(modelManager.getSelectedIndex()).toString())
+        Log.d(
+            "checking",
+            "Selecting" + modelManager.getNode(modelManager.getSelectedIndex()).toString()
+        )
         resetMaterialButton.setOnClickListener {
             /*customMaterial.reset()
             colorButton.setText(R.string.set_color)
@@ -173,28 +218,53 @@ class MainAct : AppCompatActivity() {
             Log.d("checking", modelManager.getNode(modelManager.getSelectedIndex()).toString())
         }
 
-        changeModelButton.setText("Add Cube")
-        changeModelButton.setOnClickListener {
-            Log.d("checking", "BUTTON" + cube.toString())
-            if (!modelToggle){
-                changeModelButton.setText("Add Cube")
-                scene.removeChild(cube)
-            }
+        //Log.d("checking", "CUBE" + cube.toString())
+        //Log.d("checking", "CUP" + cup.toString())
 
-            else{
-                changeModelButton.setText("Remove Cube")
-                scene.addChild(cube)
+        changeModelButton.setText("Change Background")
+        changeModelButton.setOnClickListener {
+            //Log.d("checking", "BUTTON" + cube.toString())
+            //Log.d("checking", "CUBE" + cube.toString())
+            //Log.d("checking", "CUP" + cup.toString())
+
+
+            Log.d("checking", "pressed")
+
+            if (modelToggle) {
+                sceneView.background = resources.getDrawable(
+                    resources.getIdentifier(
+                        "house2", "drawable",
+                        packageName
+                    )
+                )
+                sceneView.setBackgroundColor(getColor(R.color.transparent))
+
+            } else {
+                /*sceneView.background = resources.getDrawable(
+                    resources.getIdentifier(
+                        "colorPrimaryDark", "color",
+                        packageName
+                    )
+                )*/
+                sceneView.setBackgroundResource(0)
+                sceneView.setBackgroundColor(getColor(R.color.transparent))
+                curtain.setParent(scene)
             }
 
             modelToggle = !modelToggle
+
+
         }
 
-        scene.setOnTouchListener{hitTestResult, motionEvent ->
+        scene.setOnTouchListener { hitTestResult, motionEvent ->
             val currentNode: Node = modelManager.getNode(modelManager.getSelectedIndex())
-            Log.d("checking", "LISTENER" + modelManager.getNode(modelManager.getSelectedIndex()).toString())
+            Log.d(
+                "checking",
+                "LISTENER" + modelManager.getNode(modelManager.getSelectedIndex()).toString()
+            )
             when (motionEvent.action) {
                 MotionEvent.ACTION_DOWN -> {
-                    if(selectedName == "")
+                    if (selectedName == "")
                         selectedName = currentNode.name
                     pressTime = motionEvent.eventTime
                     Log.d("checking", pressTime.toString())
